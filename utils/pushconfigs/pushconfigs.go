@@ -80,7 +80,7 @@ func main() {
     for _, file := range strings.Split(configs, ",") {
         data := files.ReadConfig(file, path, format)
         list := convertConfig(file, data)
-        mqtt.Clear(mqttRoot + "/" + file + "/#")
+        mqtt.Clear(mqttRoot + "/" + file + "/#", 1)
         exportToMQTT(list)
     }
 

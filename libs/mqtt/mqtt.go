@@ -21,7 +21,7 @@ func Connect(host string) *client.Client {
     err := cli.Connect(&client.ConnectOptions{
         Network:  "tcp",
         Address:  host,
-        ClientID: []byte("smarthome-pushconfigs"),
+        ClientID: []byte("smarthome-go"),
     })
     if err != nil {
         log.Fatal(err)
@@ -41,18 +41,12 @@ func Publish(topic string, message string, retain bool) {
     }
 }
 
-func Clear(section string) {
-    subscribeTopic := []byte(section)
-
+func Subscribe(topic string, handler client.MessageHandler) error {
     err := cli.Subscribe(&client.SubscribeOptions{
         SubReqs: []*client.SubReq{
             &client.SubReq{
-                TopicFilter: subscribeTopic,
-                Handler: func(topicName, message []byte) {
-                    if (string(message) != "") {
-                        Publish(string(topicName), "", true)
-                    }
-                },
+                TopicFilter: []byte(topic),
+                Handler: handler,
             },
         },
     })
@@ -61,16 +55,31 @@ func Clear(section string) {
         log.Println(err)
     }
 
-    time.Sleep(1000 * time.Millisecond)
+    return err
+}
 
-    err = cli.Unsubscribe(&client.UnsubscribeOptions{
+func Unsubscribe(topic string) error {
+    err := cli.Unsubscribe(&client.UnsubscribeOptions{
         TopicFilters: [][]byte{
-            subscribeTopic,
+            []byte(topic),
         },
     })
+
     if err != nil {
         log.Println(err)
     }
 
-    time.Sleep(1000 * time.Millisecond)
+    return err
+}
+
+func Clear(topic string, delay time.Duration) {
+    Subscribe(topic, func(topicName, message []byte) {
+        if (string(message) != "") {
+            Publish(string(topicName), "", true)
+        }
+    })
+    time.Sleep(delay * time.Second)
+
+    Unsubscribe(topic)
+    time.Sleep(delay * time.Second)
 }
