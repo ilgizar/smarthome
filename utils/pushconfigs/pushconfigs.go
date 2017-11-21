@@ -3,14 +3,13 @@ package main
 import (
     "flag"
     "fmt"
-    "log"
     "os"
     "reflect"
     "strings"
     "time"
 
-    "github.com/spf13/viper"
-    "github.com/yosssi/gmq/mqtt/client"
+    "github.com/ilgizar/smarthome/libs/files"
+    "github.com/ilgizar/smarthome/libs/mqtt"
 )
 
 var mqttHost string
@@ -18,6 +17,7 @@ var mqttRoot string
 var path     string
 var configs  string
 var debug    bool
+var format   string
 
 
 func init() {
@@ -26,24 +26,11 @@ func init() {
     flag.StringVar(&mqttHost, "mqtt",   "localhost:1883", "MQTT server")
     flag.StringVar(&mqttRoot, "root",   "smarthome",      "MQTT root section")
     flag.StringVar(&configs,  "config", "",               "list of config files without extensions separated commas")
+    flag.StringVar(&format,   "format", "toml",           "config file format")
     flag.Usage = func() {
         fmt.Fprintf(os.Stderr, "Usage: %s -config <list of configs> [options]\nOptions:\n", os.Args[0])
         flag.PrintDefaults()
     }
-}
-
-func readConfig(file string) map[string]interface{} {
-    viper.SetConfigName(file)
-    viper.SetConfigType("toml")
-    viper.AddConfigPath(path)
-
-    err := viper.ReadInConfig()
-    if err != nil {
-        log.Println(err)
-        return nil
-    }
-
-    return viper.AllSettings()
 }
 
 func convertConfig(config string, data map[string]interface{}) (map[string]string) {
@@ -71,95 +58,13 @@ func convertConfig(config string, data map[string]interface{}) (map[string]strin
     return result
 }
 
-func connectMQTT() *client.Client {
-    cli := client.New(&client.Options{
-        ErrorHandler: func(err error) {
-            log.Println(err)
-        },
-    })
-    defer cli.Terminate()
-
-    err := cli.Connect(&client.ConnectOptions{
-        Network:  "tcp",
-        Address:  mqttHost,
-        ClientID: []byte("smarthome-pushconfigs"),
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    return cli
-}
-
-func showMQTTvalue(k, v string) string {
-    return fmt.Sprintf("%36s %s", k, v)
-}
-
-func sendMQTT(cli *client.Client, topic string, message string) {
-    err := cli.Publish(&client.PublishOptions{
-        TopicName: []byte(topic),
-        Message:   []byte(message),
-        Retain:    true,
-    })
-
-    if err != nil {
-        log.Println(err)
-    }
-
-    if (debug) {
-        if (message == "") {
-            fmt.Println("Remove MQTT message: " + showMQTTvalue(topic, message))
-        } else {
-            fmt.Println("Send MQTT message: " + showMQTTvalue(topic, message))
+func exportToMQTT(list map[string]string) {
+    for topic, msg := range list {
+        mqtt.Publish(topic, msg, true)
+        if (debug) {
+            fmt.Printf("Send MQTT message: %36s %s\n", topic, msg)
         }
     }
-
-}
-
-func sleep(seconds time.Duration) {
-    time.Sleep(seconds * 1000 * time.Millisecond)
-}
-
-func exportToMQTT(cli *client.Client, list map[string]string) {
-    for k, v := range list {
-        sendMQTT(cli, k, v)
-    }
-
-    sleep(1)
-}
-
-func clearMQTT(cli *client.Client, section string) {
-    topic := []byte(mqttRoot + "/" + section + "/#")
-
-    err := cli.Subscribe(&client.SubscribeOptions{
-        SubReqs: []*client.SubReq{
-            &client.SubReq{
-                TopicFilter: topic,
-                Handler: func(topicName, message []byte) {
-                    if (string(message) != "") {
-                        sendMQTT(cli, string(topicName), "")
-                    }
-                },
-            },
-        },
-    })
-
-    if err != nil {
-        log.Println(err)
-    }
-
-    sleep(1)
-
-    err = cli.Unsubscribe(&client.UnsubscribeOptions{
-        TopicFilters: [][]byte{
-            topic,
-        },
-    })
-    if err != nil {
-        log.Println(err)
-    }
-
-    sleep(1)
 }
 
 func main() {
@@ -170,12 +75,14 @@ func main() {
         return
     }
 
-    cli := connectMQTT()
+    mqtt.Connect(mqttHost)
 
     for _, file := range strings.Split(configs, ",") {
-        data := readConfig(file)
+        data := files.ReadConfig(file, path, format)
         list := convertConfig(file, data)
-        clearMQTT(cli, file)
-        exportToMQTT(cli, list)
+        mqtt.Clear(mqttRoot + "/" + file + "/#")
+        exportToMQTT(list)
     }
+
+    time.Sleep(1000 * time.Millisecond)
 }
