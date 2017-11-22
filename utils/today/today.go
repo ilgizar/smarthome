@@ -2,7 +2,7 @@ package main
 
 import (
     "flag"
-    "fmt"
+    "log"
     "regexp"
     "strings"
     "time"
@@ -157,7 +157,13 @@ func checkMoreThanDay(now time.Time) bool {
 func main() {
     flag.Parse()
 
+    if debug {
+        log.Printf("Started")
+    }
+
     mqtt.Connect(mqttHost)
+
+    initialized := false
 
     mqtt.Subscribe(mqttRoot + "/calendar/+/state", func(topic, message []byte) {
         parts := strings.Split(string(topic), "/")
@@ -166,12 +172,20 @@ func main() {
             state := string(message)
             if (types[section] != state) {
                 types[section] = state
-                fmt.Printf("%s %v\n", section, types[section])
+                if debug {
+                    msg := "Change"
+                    if !initialized {
+                        msg = "Init"
+                    }
+                    log.Printf("%s state '%s' to %v\n", msg, section, types[section])
+                }
             }
         }
     })
 
     time.Sleep(time.Duration(subscribeDelay) * time.Second)
+
+    initialized = true
 
     mqtt.Subscribe(mqttRoot + "/calendar/+/days", func(topic, message []byte) {
         parts := strings.Split(string(topic), "/")
