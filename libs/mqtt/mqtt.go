@@ -2,6 +2,7 @@ package mqtt
 
 import (
     "log"
+    "regexp"
     "time"
 
     "github.com/yosssi/gmq/mqtt/client"
@@ -17,6 +18,11 @@ func Connect(host string) *client.Client {
         },
     })
     defer cli.Terminate()
+
+    addressRE := regexp.MustCompile(`:\d{1,5}$`)
+    if !addressRE.MatchString(host) {
+        host = host + ":1883"
+    }
 
     err := cli.Connect(&client.ConnectOptions{
         Network:  "tcp",
@@ -34,6 +40,7 @@ func Publish(topic string, message string, retain bool) {
     err := cli.Publish(&client.PublishOptions{
         TopicName: []byte(topic),
         Message:   []byte(message),
+        Retain:    retain,
     })
 
     if err != nil {
