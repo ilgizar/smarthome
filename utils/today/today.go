@@ -24,17 +24,20 @@ var mqttHost       string
 var mqttRoot       string
 var dateFormat     string
 var stateRefreshed time.Time
+var weekEnd        string
+var weekEndDays    []string
 
 var dates          map[string]interface{}
 
 
 func init() {
-    flag.BoolVar(&debug,         "debug",  false,            "debug mode")
-    flag.StringVar(&mqttHost,    "mqtt",   "localhost:1883", "MQTT server")
-    flag.StringVar(&mqttRoot,    "root",   "smarthome",      "MQTT root section")
-    flag.StringVar(&dateFormat,  "format", "02.01.2006",     "date format")
-    flag.IntVar(&dateRangeLimit, "limit",  365,              "date range limit by days")
-    flag.IntVar(&subscribeDelay, "delay",  1,                "delay between MQTT subscribes on starting time by seconds")
+    flag.BoolVar(&debug,         "debug",   false,             "debug mode")
+    flag.StringVar(&mqttHost,    "mqtt",    "localhost:1883",  "MQTT server, can set without port number")
+    flag.StringVar(&mqttRoot,    "root",    "smarthome",       "MQTT root section")
+    flag.StringVar(&dateFormat,  "format",  "02.01.2006",      "date format")
+    flag.StringVar(&weekEnd,     "weekend", "Saturday,Sunday", "set weekend days separated commas of list: Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday")
+    flag.IntVar(&dateRangeLimit, "limit",   365,               "date range limit by days")
+    flag.IntVar(&subscribeDelay, "delay",   1,                 "delay between MQTT subscribes on starting time by seconds")
 
     dates = make(map[string]interface{})
     for t, _ := range types {
@@ -119,7 +122,13 @@ func checkDateType(t string) bool {
 
     if (!res && (t == "workday")) {
         weekday := now.Weekday().String()
-        res = !(weekday == "Saturday" || weekday == "Sunday")
+        res = true
+        for _, w := range weekEndDays {
+            if w == weekday {
+                res = false
+                break
+            }
+        }
     }
 
     return res
@@ -160,6 +169,8 @@ func main() {
     if debug {
         log.Printf("Started")
     }
+
+    weekEndDays = strings.Split(weekEnd, ",")
 
     mqtt.Connect(mqttHost)
 
