@@ -55,7 +55,8 @@ type RuleStruct struct {
 
 type ConfigStruct struct {
     Main struct {
-        Debug    string
+        Debug    bool
+        Delay    int
     }
 
     MQTT struct {
@@ -68,19 +69,15 @@ type ConfigStruct struct {
 }
 
 
-const (
-    defaultMQTThost = "localhost:1883"
-)
+var debug        bool
+var cmdDebug     bool
+var configFile   string
+var variableRE   *regexp.Regexp
+var config       ConfigStruct
 
-var debug          bool
-var mqttHost       string
-var configFile     string
-var variableRE     *regexp.Regexp
-var config         ConfigStruct
 
 func init() {
-    flag.BoolVar(&debug,         "debug",   false,             "debug mode")
-    flag.StringVar(&mqttHost,    "mqtt",    defaultMQTThost,   "MQTT server, can set without port number")
+    flag.BoolVar(&cmdDebug,      "debug",   false,             "debug mode")
     flag.StringVar(&configFile,  "config",  "clerk.conf",      "path to config file")
 
     variableRE = regexp.MustCompile("\\$([a-z0-9]+)")
@@ -213,15 +210,11 @@ func showDebugSourceMessage(id uint64, topic, message string) {
 
 
 func mqttConnect() {
-    if mqttHost == defaultMQTThost {
-        mqttHost = config.MQTT.Host
-    }
-
-    mqtt.Connect(mqttHost)
+    mqtt.Connect(config.MQTT.Host)
 }
 
 func initDebug() {
-    debug = debug || config.Main.Debug == "true"
+    debug = cmdDebug || config.Main.Debug
 }
 
 func initRules() {
@@ -300,7 +293,8 @@ func reloadConfig() {
         mqtt.Unsubscribe(rule.Source)
     }
 
-    time.Sleep(time.Second)
+    delay := cfg.Main.Delay
+    time.Sleep(time.Duration(delay) * time.Second)
 
     config = cfg
 
@@ -321,11 +315,6 @@ func initHUP() {
             reloadConfig()
         }
     }()
-}
-
-func loop() {
-    c := time.Tick(time.Second)
-    for _ = range c {}
 }
 
 func main() {
@@ -349,5 +338,5 @@ func main() {
 
     initHUP()
 
-    loop()
+    system.Loop()
 }
