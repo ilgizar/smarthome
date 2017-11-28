@@ -4,6 +4,7 @@ import (
     "bytes"
     "runtime"
     "strconv"
+    "time"
 )
 
 func GetGID() uint64 {
@@ -13,4 +14,9 @@ func GetGID() uint64 {
     b = b[:bytes.IndexByte(b, ' ')]
     n, _ := strconv.ParseUint(string(b), 10, 64)
     return n
+}
+
+func Loop() {
+    c := time.Tick(time.Second)
+    for _ = range c {}
 }
