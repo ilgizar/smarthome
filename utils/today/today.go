@@ -6,6 +6,7 @@ import (
     "regexp"
     "strconv"
     "strings"
+    "sync"
     "time"
 
     "github.com/ilgizar/smarthome/libs/mqtt"
@@ -23,10 +24,17 @@ var stateRefreshed time.Time
 var weekEnd        string
 var weekEndDays    []string
 
+type Map struct {
+    sync.Mutex
+    types          map[string]bool
+    exists         map[string]bool
+    dates          map[string]interface{}
+}
+
+var sharedData     Map
 var types          map[string]bool
 var exists         map[string]bool
 var dates          map[string]interface{}
-
 
 func init() {
     flag.BoolVar(&debug,         "debug",   false,             "debug mode")
@@ -37,13 +45,15 @@ func init() {
     flag.IntVar(&dateRangeLimit, "limit",   365,               "date range limit by days")
     flag.IntVar(&subscribeDelay, "delay",   1,                 "delay between MQTT subscribes on starting time by seconds")
 
-    types = make(map[string]bool)
-    exists = make(map[string]bool)
-    dates = make(map[string]interface{})
+    sharedData = Map{
+        types:  make(map[string]bool),
+        exists: make(map[string]bool),
+        dates:  make(map[string]interface{}),
+    }
     for _, t := range smarthome.TypesOfDays {
-        types[t] = false
-        exists[t] = false
-        dates[t] = []time.Time{}
+        sharedData.types[t] = false
+        sharedData.exists[t] = false
+        sharedData.dates[t] = []time.Time{}
     }
 }
 
@@ -115,7 +125,7 @@ func checkDateType(t string) bool {
 
     now := time.Now()
     now = now.Truncate(24 * time.Hour)
-    for _, d := range dates[t].([]time.Time) {
+    for _, d := range sharedData.dates[t].([]time.Time) {
         if d.Equal(now) {
             res = true
             break
@@ -138,11 +148,13 @@ func checkDateType(t string) bool {
 
 func publicState(t string) {
     if !initialized {
-        exists[t] = true
+        sharedData.Lock()
+        sharedData.exists[t] = true
+        sharedData.Unlock()
     }
 
     val := "false"
-    if types[t] {
+    if sharedData.types[t] {
         val = "true"
     }
 
@@ -156,8 +168,10 @@ func publicState(t string) {
 func checkTodayByType(t string) {
     state := checkDateType(t)
 
-    if state != types[t] {
-        types[t] = state
+    if state != sharedData.types[t] {
+        sharedData.Lock()
+        sharedData.types[t] = state
+        sharedData.Unlock()
         publicState(t)
     }
 }
@@ -195,19 +209,23 @@ func main() {
     mqtt.Subscribe(mqttRoot + "/calendar/+/state", func(topic, message []byte) {
         parts := strings.Split(string(topic), "/")
         section := parts[len(parts) - 2]
-        if _, ok:= types[section]; ok {
+        if _, ok:= sharedData.types[section]; ok {
             if !initialized {
-                exists[section] = true
+                sharedData.Lock()
+                sharedData.exists[section] = true
+                sharedData.Unlock()
             }
             state, err := strconv.ParseBool(string(message))
-            if (err == nil && types[section] != state) {
-                types[section] = state
+            if (err == nil && sharedData.types[section] != state) {
+                sharedData.Lock()
+                sharedData.types[section] = state
+                sharedData.Unlock()
                 if debug {
                     msg := "Change"
                     if !initialized {
                         msg = "Init"
                     }
-                    log.Printf("%s state '%s' to %v\n", msg, section, types[section])
+                    log.Printf("%s state '%s' to %v\n", msg, section, state)
                 }
             }
         }
@@ -218,8 +236,10 @@ func main() {
     mqtt.Subscribe(mqttRoot + "/calendar/+/days", func(topic, message []byte) {
         parts := strings.Split(string(topic), "/")
         section := parts[len(parts) - 2]
-        if _, ok:= types[section]; ok {
-            dates[section] = forgetPast(getDateArray(string2map(string(message))))
+        if _, ok:= sharedData.types[section]; ok {
+            sharedData.Lock()
+            sharedData.dates[section] = forgetPast(getDateArray(string2map(string(message))))
+            sharedData.Unlock()
             checkTodayByType(section)
         }
     })
@@ -229,7 +249,7 @@ func main() {
     initialized = true
 
     for _, t := range smarthome.TypesOfDays {
-        if !exists[t] {
+        if !sharedData.exists[t] {
             publicState(t)
         }
     }
