@@ -36,6 +36,14 @@ func Connect(host string) *client.Client {
     return cli
 }
 
+func Disconnect() {
+    if cli != nil {
+        if err := cli.Disconnect(); err != nil {
+            log.Fatal(err)
+        }
+    }
+}
+
 func Publish(topic string, message string, retain bool) {
     err := cli.Publish(&client.PublishOptions{
         TopicName: []byte(topic),
