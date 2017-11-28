@@ -5,8 +5,10 @@ import (
     "io/ioutil"
     "log"
     "os"
+    "os/signal"
     "regexp"
     "strings"
+    "syscall"
     "time"
 
 
@@ -52,6 +54,10 @@ type RuleStruct struct {
 }
 
 type ConfigStruct struct {
+    Main struct {
+        Debug    string
+    }
+
     MQTT struct {
         Host     string
         User     string
@@ -70,6 +76,7 @@ var debug          bool
 var mqttHost       string
 var configFile     string
 var variableRE     *regexp.Regexp
+var config         ConfigStruct
 
 func init() {
     flag.BoolVar(&debug,         "debug",   false,             "debug mode")
@@ -204,25 +211,20 @@ func showDebugSourceMessage(id uint64, topic, message string) {
     log.Printf("[%5d]      source message: %s\n", id, message)
 }
 
-func main() {
-    flag.Parse()
 
-    if debug {
-        log.Println("Started")
-    }
-
-    config, err := readConfig(configFile)
-
-    if err != nil {
-        log.Fatal(err)
-    }
-
+func mqttConnect() {
     if mqttHost == defaultMQTThost {
         mqttHost = config.MQTT.Host
     }
 
     mqtt.Connect(mqttHost)
+}
 
+func initDebug() {
+    debug = debug || config.Main.Debug == "true"
+}
+
+func initRules() {
     for _, rule := range config.Rule {
         if checkRuleCorrect(rule) {
             rule.Filter = compileFilters(rule.Filter)
@@ -281,7 +283,71 @@ func main() {
             }(rule)
         }
     }
+}
 
+func reloadConfig() {
+    if debug {
+        log.Println("Reload configuration")
+    }
+
+    cfg, err := readConfig(configFile)
+    if err != nil {
+        log.Printf("Failed reload configuration file '%s': %s\n", configFile, err)
+        return
+    }
+
+    for _, rule := range config.Rule {
+        mqtt.Unsubscribe(rule.Source)
+    }
+
+    time.Sleep(time.Second)
+
+    config = cfg
+
+    initDebug()
+
+    mqtt.Disconnect()
+    mqttConnect()
+
+    initRules()
+}
+
+func initHUP() {
+    c := make(chan os.Signal, 1)
+    signal.Notify(c, syscall.SIGHUP)
+
+    go func(){
+        for _ = range c {
+            reloadConfig()
+        }
+    }()
+}
+
+func loop() {
     c := time.Tick(time.Second)
     for _ = range c {}
+}
+
+func main() {
+    flag.Parse()
+
+    var err error
+    config, err = readConfig(configFile)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    initDebug()
+
+    if debug {
+        log.Println("Started")
+    }
+
+    mqttConnect()
+
+    initRules()
+
+    initHUP()
+
+    loop()
 }
