@@ -4,22 +4,18 @@ import (
     "flag"
     "log"
     "regexp"
+    "strconv"
     "strings"
     "time"
 
     "github.com/ilgizar/smarthome/libs/mqtt"
+    "github.com/ilgizar/smarthome/libs/smarthome"
 )
-
-var types = map[string]string{
-    "leave":    "false",        // отпуск
-    "vacation": "false",        // каникулы
-    "holiday":  "false",        // праздник
-    "workday":  "false",        // рабочий день
-}
 
 var dateRangeLimit int
 var subscribeDelay int
 var debug          bool
+var initialized    bool
 var mqttHost       string
 var mqttRoot       string
 var dateFormat     string
@@ -27,6 +23,8 @@ var stateRefreshed time.Time
 var weekEnd        string
 var weekEndDays    []string
 
+var types          map[string]bool
+var exists         map[string]bool
 var dates          map[string]interface{}
 
 
@@ -39,8 +37,12 @@ func init() {
     flag.IntVar(&dateRangeLimit, "limit",   365,               "date range limit by days")
     flag.IntVar(&subscribeDelay, "delay",   1,                 "delay between MQTT subscribes on starting time by seconds")
 
+    types = make(map[string]bool)
+    exists = make(map[string]bool)
     dates = make(map[string]interface{})
-    for t, _ := range types {
+    for _, t := range smarthome.TypesOfDays {
+        types[t] = false
+        exists[t] = false
         dates[t] = []time.Time{}
     }
 }
@@ -134,19 +136,34 @@ func checkDateType(t string) bool {
     return res
 }
 
-func checkTodayByType(t string) {
-    state := "false"
-    if checkDateType(t) {
-        state = "true"
+func publicState(t string) {
+    if !initialized {
+        exists[t] = true
     }
+
+    val := "false"
+    if types[t] {
+        val = "true"
+    }
+
+    if debug {
+        log.Printf("Publish state '%s' to %s\n", t, val)
+    }
+
+    mqtt.Publish(mqttRoot + "/calendar/" + t + "/state", val, true)
+}
+
+func checkTodayByType(t string) {
+    state := checkDateType(t)
+
     if state != types[t] {
         types[t] = state
-        mqtt.Publish(mqttRoot + "/calendar/" + t + "/state", state, true)
+        publicState(t)
     }
 }
 
 func checkToday() {
-    for t, _ := range types {
+    for _, t := range smarthome.TypesOfDays {
         checkTodayByType(t)
     }
 }
@@ -174,14 +191,16 @@ func main() {
 
     mqtt.Connect(mqttHost)
 
-    initialized := false
 
     mqtt.Subscribe(mqttRoot + "/calendar/+/state", func(topic, message []byte) {
         parts := strings.Split(string(topic), "/")
         section := parts[len(parts) - 2]
         if _, ok:= types[section]; ok {
-            state := string(message)
-            if (types[section] != state) {
+            if !initialized {
+                exists[section] = true
+            }
+            state, err := strconv.ParseBool(string(message))
+            if (err == nil && types[section] != state) {
                 types[section] = state
                 if debug {
                     msg := "Change"
@@ -196,8 +215,6 @@ func main() {
 
     time.Sleep(time.Duration(subscribeDelay) * time.Second)
 
-    initialized = true
-
     mqtt.Subscribe(mqttRoot + "/calendar/+/days", func(topic, message []byte) {
         parts := strings.Split(string(topic), "/")
         section := parts[len(parts) - 2]
@@ -206,6 +223,16 @@ func main() {
             checkTodayByType(section)
         }
     })
+
+    time.Sleep(time.Duration(subscribeDelay) * time.Second)
+
+    initialized = true
+
+    for _, t := range smarthome.TypesOfDays {
+        if !exists[t] {
+            publicState(t)
+        }
+    }
 
     stateRefreshed = time.Now().Add(-1 * time.Hour)
     c := time.Tick(time.Second)
