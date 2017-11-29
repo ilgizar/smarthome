@@ -1,9 +1,11 @@
 package files
 
 import (
+    "io/ioutil"
     "log"
     "os"
 
+    "github.com/influxdata/toml"
     "github.com/spf13/viper"
 )
 
@@ -28,4 +30,21 @@ func ReadConfig(file string, path string, filetype string) map[string]interface{
     }
 
     return viper.AllSettings()
+}
+
+func ReadTypedConfig(filename string, config interface{}) error {
+    f, err := os.Open(filename)
+    if err != nil {
+        return err
+    }
+    defer f.Close()
+
+    buf, err := ioutil.ReadAll(f)
+    if err != nil {
+        return err
+    }
+
+    err = toml.Unmarshal(buf, config)
+
+    return err
 }
