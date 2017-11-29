@@ -10,6 +10,15 @@ import (
 
 import p "path"
 
+var Days = [...]string{
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+}
 
 func GetGID() uint64 {
     b := make([]byte, 64)
