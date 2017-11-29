@@ -2,10 +2,14 @@ package system
 
 import (
     "bytes"
+    "os"
     "runtime"
     "strconv"
     "time"
 )
+
+import p "path"
+
 
 func GetGID() uint64 {
     b := make([]byte, 64)
@@ -19,4 +23,8 @@ func GetGID() uint64 {
 func Loop() {
     c := time.Tick(time.Second)
     for _ = range c {}
+}
+
+func GetAppName() string {
+    return p.Base(os.Args[0])
 }

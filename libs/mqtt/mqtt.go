@@ -5,6 +5,7 @@ import (
     "regexp"
     "time"
 
+    "github.com/ilgizar/smarthome/libs/system"
     "github.com/yosssi/gmq/mqtt/client"
 )
 
@@ -14,7 +15,7 @@ var cli *client.Client
 func Connect(host string) *client.Client {
     cli = client.New(&client.Options{
         ErrorHandler: func(err error) {
-            log.Println(err)
+            log.Printf("MQTT client error: %s\n", err)
         },
     })
     defer cli.Terminate()
@@ -27,8 +28,9 @@ func Connect(host string) *client.Client {
     err := cli.Connect(&client.ConnectOptions{
         Network:  "tcp",
         Address:  host,
-        ClientID: []byte("smarthome-go"),
+        ClientID: []byte("smarthome-" + system.GetAppName()),
     })
+
     if err != nil {
         log.Fatal(err)
     }
