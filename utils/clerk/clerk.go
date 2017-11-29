@@ -2,7 +2,6 @@ package main
 
 import (
     "flag"
-    "io/ioutil"
     "log"
     "os"
     "os/signal"
@@ -12,9 +11,9 @@ import (
     "time"
 
 
+    "github.com/ilgizar/smarthome/libs/files"
     "github.com/ilgizar/smarthome/libs/mqtt"
     "github.com/ilgizar/smarthome/libs/system"
-    "github.com/influxdata/toml"
 )
 
 type ValueStruct struct {
@@ -80,28 +79,7 @@ func init() {
     flag.BoolVar(&cmdDebug,      "debug",   false,             "debug mode")
     flag.StringVar(&configFile,  "config",  "clerk.conf",      "path to config file")
 
-    variableRE = regexp.MustCompile("\\$([a-z0-9]+)")
-}
-
-func readConfig(filename string) (ConfigStruct, error) {
-    var config ConfigStruct
-
-    f, err := os.Open(filename)
-    if err != nil {
-        return config, err
-    }
-    defer f.Close()
-
-    buf, err := ioutil.ReadAll(f)
-    if err != nil {
-        return config, err
-    }
-
-    if err := toml.Unmarshal(buf, &config); err != nil {
-        return ConfigStruct{}, err
-    }
-
-    return config, err
+    variableRE = regexp.MustCompile(`\$([a-z0-9]+)`)
 }
 
 func checkRuleCorrect(rule RuleStruct) bool {
@@ -195,7 +173,7 @@ func compileFilters(filters []FilterStruct) ([]FilterStruct) {
             filters[inx].Source = "message"
         }
         if filter.Regexp != "" {
-            filters[inx].RE = regexp.MustCompile(".*" + filter.Regexp + ".*")
+            filters[inx].RE = regexp.MustCompile(`.*` + filter.Regexp + `.*`)
         }
     }
 
@@ -228,14 +206,14 @@ func initRules() {
                         rule.Result[inx].Value.Source = "message"
                     }
                     if result.Value.Regexp != "" {
-                        rule.Result[inx].Value.RE = regexp.MustCompile(".*" + result.Value.Regexp + ".*")
+                        rule.Result[inx].Value.RE = regexp.MustCompile(`.*` + result.Value.Regexp + `.*`)
                     }
 
                     rule.Result[inx].Filter = compileFilters(result.Filter)
 
                     for i, _ := range result.Variable {
                         if result.Variable[i].Regexp != "" {
-                            rule.Result[inx].Variable[i].RE = regexp.MustCompile(".*" + result.Variable[i].Regexp + ".*")
+                            rule.Result[inx].Variable[i].RE = regexp.MustCompile(`.*` + result.Variable[i].Regexp + `.*`)
                         }
                     }
                 }
@@ -283,8 +261,8 @@ func reloadConfig() {
         log.Println("Reload configuration")
     }
 
-    cfg, err := readConfig(configFile)
-    if err != nil {
+    var cfg ConfigStruct
+    if err := files.ReadTypedConfig(configFile, &cfg); err != nil {
         log.Printf("Failed reload configuration file '%s': %s\n", configFile, err)
         return
     }
@@ -320,9 +298,7 @@ func initHUP() {
 func main() {
     flag.Parse()
 
-    var err error
-    config, err = readConfig(configFile)
-    if err != nil {
+    if err := files.ReadTypedConfig(configFile, &config); err != nil {
         log.Fatal(err)
     }
 
