@@ -50,6 +50,7 @@ func init() {
         exists: make(map[string]bool),
         dates:  make(map[string]interface{}),
     }
+
     for _, t := range smarthome.TypesOfDays {
         sharedData.types[t] = false
         sharedData.exists[t] = false
