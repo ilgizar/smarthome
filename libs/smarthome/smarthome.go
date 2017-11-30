@@ -48,22 +48,34 @@ type UsageConfigConditionStruct struct {
     Message      string
 }
 
+type UsageConfigActionStruct struct {
+    Type         string
+    Destination  string
+    Value        string
+}
+
 type UsageConfigLimitedStruct struct {
     UsageConfigConditionStruct
     Overall      int
     Using        int
     Pause        int
+    Action       []UsageConfigActionStruct
 }
 
 type UsageConfigOnlineStruct struct {
     UsageConfigConditionStruct
+    After        int
+    Before       int
     Pause        int
+    Action       []UsageConfigActionStruct
 }
 
 type UsageConfigRuleStruct struct {
     Name         string
     Title        string
     Nodes        []string
+    Enable       bool
+    Enabled      bool
     Allowed      []UsageConfigConditionStruct
     Denied       []UsageConfigConditionStruct
     Limited      []UsageConfigLimitedStruct

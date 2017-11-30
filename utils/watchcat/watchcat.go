@@ -3,6 +3,7 @@ package main
 import (
     "flag"
     "log"
+    "regexp"
     "strconv"
     "strings"
     "sync"
@@ -15,10 +16,14 @@ import (
 )
 
 type NodeStruct struct {
+    name           string
     title          string
     ip             string
     proto          string
     state          bool
+    changed        bool
+    online         int
+    offline        int
 }
 
 type DataStruct struct {
@@ -53,6 +58,7 @@ var sharedData     DataStruct
 var config         ConfigStruct
 var nodeConfig     smarthome.NodesConfigStruct
 var usageConfig    smarthome.UsageConfigStruct
+var variableRE     *regexp.Regexp
 
 
 
@@ -68,6 +74,8 @@ func init() {
     for _, t := range smarthome.TypesOfDays {
         sharedData.types[t] = false
     }
+
+    variableRE = regexp.MustCompile(`\$([a-z0-9-]+)`)
 }
 
 func initDebug() {
@@ -81,28 +89,158 @@ func mqttConnect() {
 func checkCondition(cond smarthome.UsageConfigConditionStruct) bool {
     res := true
 
+    now := time.Now()
     if len(cond.DatePeriod) > 0 {
+        ts := int(now.Unix())
+        res = false
+        for _, v := range cond.DatePeriod {
+            if res = ts >= v.Begin && ts <= v.End; res {
+                break
+            }
+        }
+
+        if !res {
+            return false
+        }
     }
 
     if len(cond.Weekdays) > 0 {
+        wd := now.Weekday().String()
+        res = false
+        for _, v := range cond.Weekdays {
+            if res = v == wd; res {
+                break
+            }
+        }
+
+        if !res {
+            return false
+        }
     }
 
-    if len(cond.Time) > 0 {
+    if len(cond.TimePeriod) > 0 {
+        t := now.Hour() * 60 + now.Minute()
+        res = false
+        for _, v := range cond.TimePeriod {
+            if res = t >= v.Begin && t <= v.End; res {
+                break
+            }
+        }
+
+        if !res {
+            return false
+        }
     }
 
     return res
 }
 
+func checkNodeState(node NodeStruct,
+        cond smarthome.UsageConfigOnlineStruct,
+        online bool) bool {
+    if !node.changed || node.state != online {
+        return false
+    }
+
+    currentState := node.offline
+    previousState := node.online
+    if online {
+        currentState, previousState = previousState, currentState
+    }
+
+    now := int(time.Now().Unix())
+
+    return currentState + cond.Pause * 60 < now &&
+            (cond.After == 0 ||
+                previousState + cond.After * 60 < now) &&
+            (cond.Before == 0 ||
+                currentState + cond.Before * 60 > now)
+}
+
+func checkOnlineState(node NodeStruct,
+        cond smarthome.UsageConfigOnlineStruct) bool {
+    return checkNodeState(node, cond, true)
+}
+
+func checkOfflineState(node NodeStruct,
+        cond smarthome.UsageConfigOnlineStruct) bool {
+    return checkNodeState(node, cond, false)
+}
+
+func convertActionValue(value string,
+        node NodeStruct) string {
+    for res := variableRE.FindStringSubmatch(value); res != nil; res = variableRE.FindStringSubmatch(value) {
+        val := ""
+        switch res[1] {
+            case "name":
+                val = node.name
+            case "title":
+                val = node.title
+            case "ip":
+                val = node.ip
+        }
+        value = variableRE.ReplaceAllString(value, val)
+    }
+
+    return value
+}
+
+func actionNode(node NodeStruct,
+        cond smarthome.UsageConfigOnlineStruct) {
+    for _, a := range cond.Action {
+        if a.Value != "" {
+            a.Value = convertActionValue(a.Value, node)
+            switch a.Type {
+                case "say":
+log.Printf("Say on %s: %s\n", a.Destination, a.Value)
+                case "telegram":
+log.Printf("Telegram to %s: %s\n", a.Destination, a.Value)
+                case "command":
+                    a.Value = convertActionValue(a.Value, node)
+log.Printf("Command to %s: %s\n", a.Destination, a.Value)
+                case "mqtt":
+log.Printf("MQTT publish to %s: %s\n", a.Destination, a.Value)
+            }
+        }
+    }
+}
+
+func offChangedState(node string) {
+    m := sharedData.nodes[node]
+    m.changed = false
+    sharedData.Lock()
+    sharedData.nodes[node] = m
+    sharedData.Unlock()
+}
+
 func checkUsage() {
     for _, rule := range usageConfig.Rule {
-        if len(rule.Nodes) > 0 {
-            for _, cond := range rule.Denied {
-                if checkCondition(cond) {
+        if rule.Enabled {
+            for _, cond := range rule.Offline {
+                if checkCondition(cond.UsageConfigConditionStruct) {
+                    for _, node := range rule.Nodes {
+                        if n, ok := sharedData.nodes[node]; ok {
+                            if checkOfflineState(n, cond) {
+                                offChangedState(node)
+                                actionNode(n, cond)
+                            }
+                        }
+                    }
+                    break
                 }
             }
 
-            for _, node := range rule.Nodes {
-                if _, ok := sharedData.nodes[node]; ok {
+            for _, cond := range rule.Online {
+                if checkCondition(cond.UsageConfigConditionStruct) {
+                    for _, node := range rule.Nodes {
+                        if n, ok := sharedData.nodes[node]; ok {
+                            if checkOnlineState(n, cond) {
+                                offChangedState(node)
+                                actionNode(n, cond)
+                            }
+                        }
+                    }
+                    break
                 }
             }
         }
@@ -130,10 +268,21 @@ func nodeSubscribe() {
                             v, err := strconv.ParseInt(value, 10, 64)
                             if err == nil {
                                 m := sharedData.nodes[node]
-                                m.state = v != 100
-                                sharedData.Lock()
-                                sharedData.nodes[node] = m
-                                sharedData.Unlock()
+                                state := v != 100
+                                if state != m.state {
+log.Printf("Changed state %s %+v -> %+v\n", node, m.state, state)
+                                    m.state = state
+                                    m.changed = true
+                                    now := int(time.Now().Unix())
+                                    if m.state {
+                                        m.online = now
+                                    } else {
+                                        m.offline = now
+                                    }
+                                    sharedData.Lock()
+                                    sharedData.nodes[node] = m
+                                    sharedData.Unlock()
+                                }
                             } else if debug {
                                 log.Printf("Failed convert to int value for node %s: %s", node, value)
                             }
@@ -152,6 +301,7 @@ func nodeSubscribe() {
 func initNodes() {
     for _, node := range nodeConfig.Node {
         sharedData.nodes[node.Name] = NodeStruct{
+            name:  node.Name,
             title: node.Title,
             ip:    node.IP,
             proto: node.Protocol,
@@ -176,16 +326,6 @@ func readMainConfig() {
 
 func parseDateTime(value string) (time.Time, error) {
     return time.Parse("02.01.2006 15:04:05", value)
-}
-
-func timeToTimestamp(value string) int64 {
-    now := time.Now()
-    t, err := parseDateTime(now.Format("02.01.2006") + " " + value + ":00")
-    if err == nil {
-        return t.Unix()
-    }
-
-    return -1
 }
 
 func dateToTimestamp(value string, dawn bool) int {
@@ -314,28 +454,25 @@ func readUsageConfig() {
     }
 
     for r, rule := range usageConfig.Rule {
-        if len(rule.Nodes) > 0 {
+        usageConfig.Rule[r].Enabled = rule.Enable && len(rule.Nodes) > 0
+        if rule.Enable {
             for c, _ := range rule.Denied {
                 prepareCondition(&usageConfig.Rule[r].Denied[c])
             }
             for c, _ := range rule.Allowed {
                 prepareCondition(&usageConfig.Rule[r].Allowed[c])
             }
-/*
             for c, _ := range rule.Limited {
-                prepareCondition(&smarthome.UsageConfigConditionStruct(usageConfig.Rule[r].Limited[c]))
-            }
-            for c, _ := range rule.Offline {
-                prepareCondition(&smarthome.UsageConfigConditionStruct(usageConfig.Rule[r].Online[c]))
+                prepareCondition(&usageConfig.Rule[r].Limited[c].UsageConfigConditionStruct)
             }
             for c, _ := range rule.Online {
-                prepareCondition(&smarthome.UsageConfigConditionStruct(usageConfig.Rule[r].Offline[c]))
+                prepareCondition(&usageConfig.Rule[r].Online[c].UsageConfigConditionStruct)
             }
-*/
+            for c, _ := range rule.Offline {
+                prepareCondition(&usageConfig.Rule[r].Offline[c].UsageConfigConditionStruct)
+            }
         }
     }
-
-    log.Printf("%+v\n", usageConfig)
 }
 
 func main() {
