@@ -8,6 +8,10 @@ import (
     "github.com/ilgizar/smarthome/libs/smarthome"
 )
 
+var debug          bool
+var cmdDebug       bool
+var configFile     string
+
 
 func init() {
     flag.BoolVar(&cmdDebug,      "debug",   false,             "debug mode")

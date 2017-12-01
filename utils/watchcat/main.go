@@ -3,10 +3,19 @@ package main
 import (
     "flag"
     "log"
+    "sync"
     "time"
 
     "github.com/ilgizar/smarthome/libs/files"
 )
+
+type DataStruct struct {
+    sync.Mutex
+    types          map[string]bool
+    nodes          map[string]NodeStruct
+}
+
+var sharedData     DataStruct
 
 
 func main() {

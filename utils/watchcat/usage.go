@@ -59,13 +59,13 @@ func checkCondition(cond smarthome.UsageConfigConditionStruct) bool {
 func checkUsage() {
     for _, rule := range usageConfig.Rule {
         if rule.Enabled {
-            for _, cond := range rule.Offline {
+            for c, cond := range rule.Offline {
                 if checkCondition(cond.UsageConfigConditionStruct) {
                     for _, node := range rule.Nodes {
                         if n, ok := sharedData.nodes[node]; ok {
                             if checkOfflineState(n, cond) {
                                 offChangedState(node)
-                                actionNode(n, cond)
+                                actionNode(n, &rule.Offline[c].Action)
                             }
                         }
                     }
@@ -73,13 +73,13 @@ func checkUsage() {
                 }
             }
 
-            for _, cond := range rule.Online {
+            for c, cond := range rule.Online {
                 if checkCondition(cond.UsageConfigConditionStruct) {
                     for _, node := range rule.Nodes {
                         if n, ok := sharedData.nodes[node]; ok {
                             if checkOnlineState(n, cond) {
                                 offChangedState(node)
-                                actionNode(n, cond)
+                                actionNode(n, &rule.Online[c].Action)
                             }
                         }
                     }

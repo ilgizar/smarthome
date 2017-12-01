@@ -9,6 +9,29 @@ import (
     "github.com/ilgizar/smarthome/libs/smarthome"
 )
 
+type ConfigStruct struct {
+    Main struct {
+        Debug      bool
+        Nodes      string
+        Usage      string
+    }
+    MQTT struct {
+        Host       string
+        User       string
+        Password   string
+        Topic      string
+    }
+}
+
+const (
+    defaultNodesConfig = "nodes.conf"
+    defaultUsageConfig = "usage.conf"
+)
+
+var config         ConfigStruct
+var nodeConfig     smarthome.NodesConfigStruct
+var usageConfig    smarthome.UsageConfigStruct
+
 
 func prepareCondition(cond *smarthome.UsageConfigConditionStruct) {
     if len(cond.Date) > 0 {

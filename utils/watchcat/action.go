@@ -1,14 +1,16 @@
 package main
 
 import (
-    "log"
+    "regexp"
 
+    "github.com/ilgizar/smarthome/libs/mqtt"
     "github.com/ilgizar/smarthome/libs/smarthome"
 )
 
+var variableRE     *regexp.Regexp
 
-func convertActionValue(value string,
-        node NodeStruct) string {
+
+func convertActionValue(value string, node NodeStruct) string {
     for res := variableRE.FindStringSubmatch(value); res != nil; res = variableRE.FindStringSubmatch(value) {
         val := ""
         switch res[1] {
@@ -25,21 +27,16 @@ func convertActionValue(value string,
     return value
 }
 
-func actionNode(node NodeStruct,
-        cond smarthome.UsageConfigOnlineStruct) {
-    for _, a := range cond.Action {
-        if a.Value != "" {
+func actionNode(node NodeStruct, actions *[]smarthome.UsageConfigActionStruct) {
+    for _, a := range *actions {
+        if a.Value != "" && a.Destination != "" {
             a.Value = convertActionValue(a.Value, node)
+            a.Destination = convertActionValue(a.Destination, node)
             switch a.Type {
-                case "say":
-log.Printf("Say on %s: %s\n", a.Destination, a.Value)
-                case "telegram":
-log.Printf("Telegram to %s: %s\n", a.Destination, a.Value)
-                case "command":
-                    a.Value = convertActionValue(a.Value, node)
-log.Printf("Command to %s: %s\n", a.Destination, a.Value)
+                case "say", "telegram", "controller":
+                    mqtt.Publish("smarthome/util/" + a.Type + "/" + a.Destination, a.Value, false)
                 case "mqtt":
-log.Printf("MQTT publish to %s: %s\n", a.Destination, a.Value)
+                    mqtt.Publish(a.Destination, a.Value, false)
             }
         }
     }
