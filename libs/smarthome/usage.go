@@ -1,33 +1,5 @@
 package smarthome
 
-// Types of a days
-
-var TypesOfDays = []string {
-    "leave",            // work vacation
-    "vacation",         // school vacation
-    "holiday",          // holiday
-    "workday",          // work day
-}
-
-// Nodes configuration file structure
-
-type NodeOptionConfigStruct struct {
-    Name         string
-    Value        string
-}
-
-type NodeConfigStruct struct {
-    Name         string
-    Title        string
-    IP           string
-    Protocol     string
-    Option       []NodeOptionConfigStruct
-}
-
-type NodesConfigStruct struct {
-    Node         []NodeConfigStruct
-}
-
 // Usage configuration file structure
 
 type UsageConfigPeriodStruct struct {
