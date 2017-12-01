@@ -32,15 +32,17 @@ func nodeSubscribe() {
                             if err == nil {
                                 m := sharedData.nodes[node]
                                 state := v != 100
-                                if state != m.state {
-                                    m.state = state
-                                    m.changed = true
+                                if (state && m.state != "online") || (!state && m.state != "offline") {
                                     now := int(time.Now().Unix())
-                                    if m.state {
+                                    if state {
+                                        m.state = "online"
                                         m.online = now
                                     } else {
+                                        m.state = "offline"
                                         m.offline = now
                                     }
+                                    m.changed = true
+
                                     sharedData.Lock()
                                     sharedData.nodes[node] = m
                                     sharedData.Unlock()

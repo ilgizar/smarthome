@@ -44,7 +44,7 @@ func initNodes() {
             title: node.Title,
             ip:    node.IP,
             proto: node.Protocol,
-            state: false,
+            state: "",
         }
     }
 }

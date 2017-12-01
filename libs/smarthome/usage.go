@@ -7,23 +7,31 @@ type UsageConfigPeriodStruct struct {
     End          int
 }
 
-type UsageConfigConditionStruct struct {
-    Date         []string
-    DatePeriod   []UsageConfigPeriodStruct
-    Time         []string
-    TimePeriod   []UsageConfigPeriodStruct
-    Weekday      []string
-    Weekdays     []string
-    Online       []string
-    Offline      []string
-    Quiet        bool
-    Message      string
-}
-
 type UsageConfigActionStruct struct {
     Type         string
     Destination  string
     Value        string
+    Enable       bool
+    After        int
+    Before       int
+    Pause        int
+
+    Enabled      bool
+}
+
+type UsageConfigConditionStruct struct {
+    Date         []string
+    Time         []string
+    Weekday      []string
+    Online       []string
+    Offline      []string
+    Quiet        bool
+    Message      string
+    Action       []UsageConfigActionStruct
+
+    DatePeriod   []UsageConfigPeriodStruct
+    TimePeriod   []UsageConfigPeriodStruct
+    Weekdays     []string
 }
 
 type UsageConfigLimitedStruct struct {
@@ -31,15 +39,6 @@ type UsageConfigLimitedStruct struct {
     Overall      int
     Using        int
     Pause        int
-    Action       []UsageConfigActionStruct
-}
-
-type UsageConfigOnlineStruct struct {
-    UsageConfigConditionStruct
-    After        int
-    Before       int
-    Pause        int
-    Action       []UsageConfigActionStruct
 }
 
 type UsageConfigRuleStruct struct {
@@ -47,12 +46,13 @@ type UsageConfigRuleStruct struct {
     Title        string
     Nodes        []string
     Enable       bool
-    Enabled      bool
     Allowed      []UsageConfigConditionStruct
     Denied       []UsageConfigConditionStruct
     Limited      []UsageConfigLimitedStruct
-    Online       []UsageConfigOnlineStruct
-    Offline      []UsageConfigOnlineStruct
+    Online       []UsageConfigConditionStruct
+    Offline      []UsageConfigConditionStruct
+
+    Enabled      bool
 }
 
 type UsageConfigStruct struct {

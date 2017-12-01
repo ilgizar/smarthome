@@ -14,6 +14,7 @@ type ConfigStruct struct {
         Debug      bool
         Nodes      string
         Usage      string
+        Topic      string
     }
     MQTT struct {
         Host       string
@@ -26,6 +27,7 @@ type ConfigStruct struct {
 const (
     defaultNodesConfig = "nodes.conf"
     defaultUsageConfig = "usage.conf"
+    defaultTopic       = "smarthome"
 )
 
 var config         ConfigStruct
@@ -115,6 +117,15 @@ func prepareCondition(cond *smarthome.UsageConfigConditionStruct) {
         }
         cond.TimePeriod = periods
     }
+
+    if len(cond.Action) > 0 {
+        for i, _ := range cond.Action {
+            cond.Action[i].Enabled = cond.Action[i].Enable &&
+                cond.Action[i].Type != "" &&
+                cond.Action[i].Value != "" &&
+                cond.Action[i].Destination != ""
+        }
+    }
 }
 
 func readUsageConfig() {
@@ -135,10 +146,10 @@ func readUsageConfig() {
                 prepareCondition(&usageConfig.Rule[r].Limited[c].UsageConfigConditionStruct)
             }
             for c, _ := range rule.Online {
-                prepareCondition(&usageConfig.Rule[r].Online[c].UsageConfigConditionStruct)
+                prepareCondition(&usageConfig.Rule[r].Online[c])
             }
             for c, _ := range rule.Offline {
-                prepareCondition(&usageConfig.Rule[r].Offline[c].UsageConfigConditionStruct)
+                prepareCondition(&usageConfig.Rule[r].Offline[c])
             }
         }
     }
@@ -155,5 +166,9 @@ func readMainConfig() {
 
     if config.Main.Usage == "" {
         config.Main.Usage = defaultUsageConfig
+    }
+
+    if config.Main.Topic == "" {
+        config.Main.Topic = defaultTopic
     }
 }
