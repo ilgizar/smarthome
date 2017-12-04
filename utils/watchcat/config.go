@@ -6,6 +6,7 @@ import (
     "time"
 
     "github.com/ilgizar/smarthome/libs/files"
+    "github.com/ilgizar/smarthome/libs/mqtt"
     "github.com/ilgizar/smarthome/libs/smarthome"
 )
 
@@ -15,6 +16,7 @@ type ConfigStruct struct {
         Nodes      string
         Usage      string
         Topic      string
+        Delay      int
     }
     MQTT struct {
         Host       string
@@ -120,7 +122,7 @@ func prepareCondition(cond *smarthome.UsageConfigConditionStruct) {
 
     if len(cond.Action) > 0 {
         for i, _ := range cond.Action {
-            cond.Action[i].Enabled = cond.Action[i].Enable &&
+            cond.Action[i].Enabled = !cond.Action[i].Disable &&
                 cond.Action[i].Type != "" &&
                 cond.Action[i].Value != "" &&
                 cond.Action[i].Destination != ""
@@ -128,14 +130,10 @@ func prepareCondition(cond *smarthome.UsageConfigConditionStruct) {
     }
 }
 
-func readUsageConfig() {
-    if err := files.ReadTypedConfig(config.Main.Usage, &usageConfig); err != nil {
-        log.Fatal(err)
-    }
-
+func initUsageConfig() {
     for r, rule := range usageConfig.Rule {
-        usageConfig.Rule[r].Enabled = rule.Enable && len(rule.Nodes) > 0
-        if rule.Enable {
+        usageConfig.Rule[r].Enabled = !rule.Disable && len(rule.Nodes) > 0
+        if usageConfig.Rule[r].Enabled {
             for c, _ := range rule.Denied {
                 prepareCondition(&usageConfig.Rule[r].Denied[c])
             }
@@ -154,12 +152,21 @@ func readUsageConfig() {
         }
     }
 }
-
-func readMainConfig() {
-    if err := files.ReadTypedConfig(configFile, &config); err != nil {
+func readUsageConfig() {
+    if err := files.ReadTypedConfig(config.Main.Usage, &usageConfig); err != nil {
         log.Fatal(err)
     }
 
+    initUsageConfig()
+}
+
+func readNodesConfig() {
+    if err := files.ReadTypedConfig(config.Main.Nodes, &nodeConfig); err != nil {
+        log.Fatal(err)
+    }
+}
+
+func initMainConfig() {
     if config.Main.Nodes == "" {
         config.Main.Nodes = defaultNodesConfig
     }
@@ -171,4 +178,69 @@ func readMainConfig() {
     if config.Main.Topic == "" {
         config.Main.Topic = defaultTopic
     }
+}
+
+func readMainConfig() {
+    if err := files.ReadTypedConfig(configFile, &config); err != nil {
+        log.Fatal(err)
+    }
+
+    initMainConfig()
+}
+
+func readConfigs() {
+    readMainConfig()
+    readNodesConfig()
+    readUsageConfig()
+}
+
+func reloadConfigFile(configFile string, cfg interface{}) bool {
+    if err := files.ReadTypedConfig(configFile, cfg); err != nil {
+        log.Printf("Failed reload configuration file '%s': %s\n", configFile, err)
+        return false
+    }
+
+    return true
+}
+
+func reloadConfigs(cfg interface{}, ncfg interface{}, ucfg interface{}) bool {
+    return reloadConfigFile(configFile, cfg) &&
+            reloadConfigFile(config.Main.Nodes, ncfg) &&
+            reloadConfigFile(config.Main.Usage, ucfg)
+}
+
+func reloadConfig() {
+    if debug {
+        log.Println("Reload configuration")
+    }
+
+    var cfg ConfigStruct
+    var ncfg smarthome.NodesConfigStruct
+    var ucfg smarthome.UsageConfigStruct
+    if !reloadConfigs(&cfg, &ncfg, &ucfg) {
+        return
+    }
+
+    nodeUnsubscribe()
+    time.Sleep(time.Duration(cfg.Main.Delay) * time.Second)
+    mqtt.Disconnect()
+
+    config = cfg
+    initMainConfig()
+
+    initDebug()
+
+    sharedData.Lock()
+    sharedData.nodes = map[string]NodeStruct{}
+    initTypes()
+    sharedData.Unlock()
+
+    nodeConfig = ncfg
+    usageConfig = ucfg
+    initUsageConfig()
+
+    initNodes()
+
+    mqttConnect()
+    nodeSubscribe()
 }

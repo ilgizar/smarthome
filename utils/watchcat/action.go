@@ -1,6 +1,7 @@
 package main
 
 import (
+    "log"
     "regexp"
     "time"
 
@@ -26,13 +27,13 @@ func checkActionState(node NodeStruct, action smarthome.UsageConfigActionStruct)
                 currentState, previousState = previousState, currentState
             }
 
-            return currentState + action.Pause * 60 < now &&
+            return currentState + action.Pause < now &&
                 (action.After == 0 ||
-                    previousState + action.After * 60 < now) &&
+                    previousState + action.After < now) &&
                 (action.Before == 0 ||
-                    currentState + action.Before * 60 > now)
+                    currentState + action.Before > now)
         default:
-            return node.eventtime + action.Pause * 60 < now
+            return node.eventtime + action.Pause < now
     }
 }
 
@@ -59,13 +60,20 @@ func offActionState(action *smarthome.UsageConfigActionStruct) {
     sharedData.Unlock()
 }
 
-func actionNode(n string) {
-    node := sharedData.nodes[n]
+func actionNode(nodeName string) {
+    if debug {
+        log.Printf("actionNode(%s)\n", nodeName)
+    }
+
+    node := sharedData.nodes[nodeName]
     for a, action := range node.actions {
         if checkActionState(node, action) {
-            offActionState(&sharedData.nodes[n].actions[a])
+            offActionState(&sharedData.nodes[nodeName].actions[a])
             action.Value = convertActionValue(action.Value, node)
             action.Destination = convertActionValue(action.Destination, node)
+            if debug {
+                log.Printf("action node '%s' type '%s' destination '%s' value '%s'\n", nodeName, action.Type, action.Destination, action.Value)
+            }
             switch action.Type {
                 case "say", "telegram", "controller":
                     mqtt.Publish(config.Main.Topic + "/util/" + action.Type + "/" + action.Destination, action.Value, false)

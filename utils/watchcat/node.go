@@ -1,6 +1,7 @@
 package main
 
 import (
+    "log"
     "time"
 
     "github.com/ilgizar/smarthome/libs/smarthome"
@@ -22,21 +23,35 @@ type NodeStruct struct {
 }
 
 
-func clearNodeActions(node string) {
-    m := sharedData.nodes[node]
+func nodeExists(nodeName string) bool {
+    _, ok := sharedData.nodes[nodeName]
+
+    return ok
+}
+
+func clearNodeActions(nodeName string) {
+    if !nodeExists(nodeName) {
+        return
+    }
+
+    m := sharedData.nodes[nodeName]
     m.active = false
-    m.actions = []smarthome.UsageConfigActionStruct{}
+    m.actions = m.actions[:0]
 
     sharedData.Lock()
-    sharedData.nodes[node] = m
+    sharedData.nodes[nodeName] = m
     sharedData.Unlock()
 }
 
 func checkNodeState(
-        n string,
+        nodeName string,
         cond smarthome.UsageConfigConditionStruct,
         state string) bool {
-    node := sharedData.nodes[n]
+    if !nodeExists(nodeName) {
+        return false
+    }
+
+    node := sharedData.nodes[nodeName]
     if node.active {
         res := false
         for _, a := range node.actions {
@@ -47,10 +62,10 @@ func checkNodeState(
         }
 
         if !res {
-            clearNodeActions(n)
+            clearNodeActions(nodeName)
         }
 
-        return res
+        return false
     }
 
     if !node.changed || node.state != state {
@@ -61,26 +76,34 @@ func checkNodeState(
 }
 
 func checkOnlineState(
-        node string,
+        nodeName string,
         cond smarthome.UsageConfigConditionStruct) bool {
-    return checkNodeState(node, cond, "online")
+    return checkNodeState(nodeName, cond, "online")
 }
 
 func checkOfflineState(
-        node string,
+        nodeName string,
         cond smarthome.UsageConfigConditionStruct) bool {
-    return checkNodeState(node, cond, "offline")
+    return checkNodeState(nodeName, cond, "offline")
 }
 
-func initNodeActions(node string, cond smarthome.UsageConfigConditionStruct) {
-    m := sharedData.nodes[node]
+func initNodeActions(nodeName string, cond smarthome.UsageConfigConditionStruct) {
+    if debug {
+        log.Printf("initNodeActions(%s)\n", nodeName)
+    }
+
+    if !nodeExists(nodeName) {
+        return
+    }
+
+    m := sharedData.nodes[nodeName]
     m.changed = false
     m.active = true
-    a := cond.Action
-    m.actions = a
+    m.actions = make([]smarthome.UsageConfigActionStruct, len(cond.Action))
+    copy(m.actions, cond.Action)
     m.eventtime = int(time.Now().Unix())
 
     sharedData.Lock()
-    sharedData.nodes[node] = m
+    sharedData.nodes[nodeName] = m
     sharedData.Unlock()
 }

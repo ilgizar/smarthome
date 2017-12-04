@@ -5,8 +5,6 @@ import (
     "log"
     "sync"
     "time"
-
-    "github.com/ilgizar/smarthome/libs/files"
 )
 
 type DataStruct struct {
@@ -21,13 +19,7 @@ var sharedData     DataStruct
 func main() {
     flag.Parse()
 
-    readMainConfig()
-
-    if err := files.ReadTypedConfig(config.Main.Nodes, &nodeConfig); err != nil {
-        log.Fatal(err)
-    }
-
-    readUsageConfig()
+    readConfigs()
 
     initDebug()
 
@@ -35,14 +27,15 @@ func main() {
         log.Println("Started")
     }
 
+    initHUP()
+
     initNodes()
 
     mqttConnect()
-
     nodeSubscribe()
 
     c := time.Tick(time.Second)
     for _ = range c {
-        checkUsage()
+        checkUsage("", "")
     }
 }

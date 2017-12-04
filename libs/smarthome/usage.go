@@ -11,7 +11,7 @@ type UsageConfigActionStruct struct {
     Type         string
     Destination  string
     Value        string
-    Enable       bool
+    Disable      bool
     After        int
     Before       int
     Pause        int
@@ -45,7 +45,7 @@ type UsageConfigRuleStruct struct {
     Name         string
     Title        string
     Nodes        []string
-    Enable       bool
+    Disable      bool
     Allowed      []UsageConfigConditionStruct
     Denied       []UsageConfigConditionStruct
     Limited      []UsageConfigLimitedStruct

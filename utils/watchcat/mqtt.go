@@ -35,9 +35,11 @@ func nodeSubscribe() {
                                 if (state && m.state != "online") || (!state && m.state != "offline") {
                                     now := int(time.Now().Unix())
                                     if state {
+                                        log.Printf("Change node '%s' state '%s' -> 'online'", node, m.state)
                                         m.state = "online"
                                         m.online = now
                                     } else {
+                                        log.Printf("Change node '%s' state '%s' -> 'offline'", node, m.state)
                                         m.state = "offline"
                                         m.offline = now
                                     }
@@ -46,6 +48,10 @@ func nodeSubscribe() {
                                     sharedData.Lock()
                                     sharedData.nodes[node] = m
                                     sharedData.Unlock()
+
+                                    clearNodeActions(node)
+
+                                    checkUsage(m.state, node)
                                 }
                             } else if debug {
                                 log.Printf("Failed convert to int value for node %s: %s", node, value)
@@ -60,4 +66,8 @@ func nodeSubscribe() {
             log.Printf("Unknown node: %s", node)
         }
     })
+}
+
+func nodeUnsubscribe() {
+    mqtt.Unsubscribe(config.MQTT.Topic)
 }

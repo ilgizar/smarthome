@@ -1,6 +1,8 @@
 package main
 
 import (
+    "fmt"
+    "log"
     "time"
 
     "github.com/ilgizar/smarthome/libs/smarthome"
@@ -40,7 +42,7 @@ func checkCondition(cond smarthome.UsageConfigConditionStruct) bool {
     }
 
     if len(cond.TimePeriod) > 0 {
-        t := now.Hour() * 60 + now.Minute()
+        t := timeToMinutes(fmt.Sprintf("%02d:%02d", now.Hour(), now.Minute()))
         res = false
         for _, v := range cond.TimePeriod {
             if res = t >= v.Begin && t <= v.End; res {
@@ -56,38 +58,50 @@ func checkCondition(cond smarthome.UsageConfigConditionStruct) bool {
     return res
 }
 
-func checkUsage() {
+func checkUsage(state string, nodeName string) {
+    if debug {
+        log.Printf("checkUsage('%s', '%s')\n", state, nodeName)
+    }
+
     for _, rule := range usageConfig.Rule {
         if rule.Enabled {
-            for _, cond := range rule.Offline {
-                if checkCondition(cond) {
-                    for _, node := range rule.Nodes {
-                        if n, ok := sharedData.nodes[node]; ok {
-                            if checkOfflineState(node, cond) {
-                                initNodeActions(node, cond)
+            if state == "" || state == "offline" {
+                for _, cond := range rule.Offline {
+                    if checkCondition(cond) {
+                        for _, node := range rule.Nodes {
+                            if nodeName != "" && nodeName != node {
+                                return
                             }
-                            if n.active {
-                                actionNode(node)
+                            if n, ok := sharedData.nodes[node]; ok {
+                                if checkOfflineState(node, cond) {
+                                    initNodeActions(node, cond)
+                                }
+                                if n.active {
+                                    actionNode(node)
+                                }
                             }
                         }
                     }
-                    break
                 }
             }
 
-            for _, cond := range rule.Online {
-                if checkCondition(cond) {
-                    for _, node := range rule.Nodes {
-                        if n, ok := sharedData.nodes[node]; ok {
-                            if checkOnlineState(node, cond) {
-                                initNodeActions(node, cond)
+            if state == "" || state == "online" {
+                for _, cond := range rule.Online {
+                    if checkCondition(cond) {
+                        for _, node := range rule.Nodes {
+                            if nodeName != "" && nodeName != node {
+                                return
                             }
-                            if n.active {
-                                actionNode(node)
+                            if n, ok := sharedData.nodes[node]; ok {
+                                if checkOnlineState(node, cond) {
+                                    initNodeActions(node, cond)
+                                }
+                                if n.active {
+                                    actionNode(node)
+                                }
                             }
                         }
                     }
-                    break
                 }
             }
         }
