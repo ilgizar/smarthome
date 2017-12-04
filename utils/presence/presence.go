@@ -92,7 +92,7 @@ func getDataFromDB(deviceName string, periodBegin string, periodEnd string) ([]c
         log.Println(query)
     }
 
-    return influx.QueryDB(query)
+    return influx.Query(query)
 }
 
 func getUsageStat() (UsageStat, error) {
@@ -195,7 +195,7 @@ func out(stat UsageStat) {
 func main() {
     flag.Parse()
 
-    influx.ConnectDB(InfluxHost, InfluxUser, InfluxPasswd, InfluxDB)
+    influx.Connect(InfluxHost, InfluxUser, InfluxPasswd, InfluxDB)
     stat, err := getUsageStat()
     if (err != nil) {
         log.Fatal(err)

@@ -11,7 +11,7 @@ var influxClient client.Client
 var influxBP client.BatchPoints
 
 
-func ConnectDB(InfluxHost string, InfluxUser string, InfluxPass string, InfluxDB string) {
+func Connect(InfluxHost string, InfluxUser string, InfluxPass string, InfluxDB string) {
     var err error
     influxClient, err = client.NewHTTPClient(client.HTTPConfig{
         Addr:     InfluxHost,
@@ -32,7 +32,11 @@ func ConnectDB(InfluxHost string, InfluxUser string, InfluxPass string, InfluxDB
     }
 }
 
-func QueryDB(cmd string) (res []client.Result, err error) {
+func Disconnect() {
+    influxClient.Close()
+}
+
+func Query(cmd string) (res []client.Result, err error) {
     q := client.Query{
         Command:  cmd,
         Database: influxDB,
