@@ -51,10 +51,8 @@ func checkUsage(state string, nodeName string) {
             loopCondition(rule, cond, nodeName, "denied")
         }
 
-/*
         for _, cond := range rule.Limited {
             loopCondition(rule, cond, nodeName, "limited")
         }
-*/
     }
 }

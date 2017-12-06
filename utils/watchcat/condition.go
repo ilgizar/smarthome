@@ -3,13 +3,36 @@ package main
 import (
     "fmt"
     "log"
+    "reflect"
     "time"
 
     "github.com/ilgizar/smarthome/libs/smarthome"
 )
 
 
-func checkCondition(cond smarthome.UsageConfigConditionStruct) bool {
+func getConditionStruct(c interface{}) (smarthome.UsageConfigConditionStruct, bool) {
+    ok := true
+
+    t := reflect.TypeOf(c).String()
+    var cond smarthome.UsageConfigConditionStruct
+    switch t {
+        case "smarthome.UsageConfigConditionStruct":
+            cond = c.(smarthome.UsageConfigConditionStruct)
+        case "smarthome.UsageConfigLimitedStruct":
+            cond = c.(smarthome.UsageConfigLimitedStruct).UsageConfigConditionStruct
+        default:
+            ok = false
+    }
+
+    return cond, ok
+}
+
+func checkCondition(c interface{}) bool {
+    cond, ok := getConditionStruct(c)
+    if !ok {
+        return false
+    }
+
     res := true
 
     now := time.Now()
@@ -58,10 +81,15 @@ func checkCondition(cond smarthome.UsageConfigConditionStruct) bool {
     return res
 }
 
-func loopCondition(rule smarthome.UsageConfigRuleStruct, cond smarthome.UsageConfigConditionStruct, nodeName string, state string) {
+func loopCondition(rule smarthome.UsageConfigRuleStruct, c interface{}, nodeName string, state string) {
     mode := getModeByState(state)
 
-    ok := checkCondition(cond)
+    cond, ok := getConditionStruct(c)
+    if !ok {
+        return
+    }
+
+    ok = checkCondition(c)
     if !(ok || (mode == "permit" && state != "limited")) {
         return
     }
