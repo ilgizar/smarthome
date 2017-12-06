@@ -31,6 +31,7 @@ func main() {
 
     initNodes()
 
+    initInfluxDB()
     mqttConnect()
     nodeSubscribe()
 

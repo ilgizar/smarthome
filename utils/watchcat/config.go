@@ -6,6 +6,7 @@ import (
     "time"
 
     "github.com/ilgizar/smarthome/libs/files"
+    "github.com/ilgizar/smarthome/libs/influx"
     "github.com/ilgizar/smarthome/libs/mqtt"
     "github.com/ilgizar/smarthome/libs/smarthome"
 )
@@ -24,12 +25,21 @@ type ConfigStruct struct {
         Password   string
         Topic      string
     }
+    Influx struct {
+        Host       string
+        User       string
+        Password   string
+        DB         string
+    }
 }
 
 const (
     defaultNodesConfig = "nodes.conf"
     defaultUsageConfig = "usage.conf"
     defaultTopic       = "smarthome"
+
+    defaultInflux      = "https://localhost:8086"
+    defaultDB          = "telegraf"
 )
 
 var config         ConfigStruct
@@ -178,6 +188,14 @@ func initMainConfig() {
     if config.Main.Topic == "" {
         config.Main.Topic = defaultTopic
     }
+
+    if config.Influx.Host == "" {
+        config.Influx.Host = defaultInflux
+    }
+
+    if config.Influx.DB == "" {
+        config.Influx.DB = defaultDB
+    }
 }
 
 func readMainConfig() {
@@ -225,6 +243,8 @@ func reloadConfig() {
     time.Sleep(time.Duration(cfg.Main.Delay) * time.Second)
     mqtt.Disconnect()
 
+    influx.Disconnect()
+
     config = cfg
     initMainConfig()
 
@@ -241,6 +261,7 @@ func reloadConfig() {
 
     initNodes()
 
+    initInfluxDB()
     mqttConnect()
     nodeSubscribe()
 }

@@ -11,6 +11,7 @@ type UsageConfigActionStruct struct {
     Type         string
     Destination  string
     Value        string
+    Event        string
     Disable      bool
     After        int
     Before       int
