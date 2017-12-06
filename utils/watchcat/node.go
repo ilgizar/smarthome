@@ -33,7 +33,7 @@ func nodeExists(nodeName string) bool {
     return ok
 }
 
-func clearNodeActions(nodeName string, mode string) {
+func clearNodeActions(nodeName string, modeName string) {
     if !nodeExists(nodeName) {
         return
     }
@@ -41,9 +41,9 @@ func clearNodeActions(nodeName string, mode string) {
     sharedData.Lock()
     n := sharedData.nodes[nodeName]
     clear := true
-    if mode != "" {
+    if modeName != "" {
         m := "state"
-        if mode == "state" {
+        if modeName == "state" {
             m = "permit"
         }
         clear = len(n.modes[m].actions) == 0
@@ -53,10 +53,10 @@ func clearNodeActions(nodeName string, mode string) {
     }
 
     modes := []string{}
-    if mode == "" {
+    if modeName == "" {
         modes = append(modes, "state", "permit")
     } else {
-        modes = append(modes, mode)
+        modes = append(modes, modeName)
     }
     for _, mode := range modes {
         m := n.modes[mode]
@@ -76,9 +76,9 @@ func checkNodeState(nodeName string, cond smarthome.UsageConfigConditionStruct, 
         return false
     }
 
-    mode := getModeByState(state)
+    modeName := getModeNameByState(state)
     node := sharedData.nodes[nodeName]
-    changedState := node.modes[mode].changed && node.modes[mode].state == state
+    changedState := node.modes[modeName].changed && node.modes[modeName].state == state
     log.Printf("changedState: %v %+v\n", changedState, node)
 
     if node.active {
@@ -112,19 +112,19 @@ func initNodeActions(nodeName string, cond smarthome.UsageConfigConditionStruct,
         return
     }
 
-    mode := getModeByState(state)
+    modeName := getModeNameByState(state)
 
     sharedData.Lock()
     n := sharedData.nodes[nodeName]
 
-    m := n.modes[mode]
-    m.actions = make([]smarthome.UsageConfigActionStruct, len(cond.Action))
-    copy(m.actions, cond.Action)
-    m.eventtime[state] = int(time.Now().Unix())
-    m.active = true
-    m.changed = false
+    mode := n.modes[modeName]
+    mode.actions = make([]smarthome.UsageConfigActionStruct, len(cond.Action))
+    copy(mode.actions, cond.Action)
+    mode.eventtime[state] = int(time.Now().Unix())
+    mode.active = true
+    mode.changed = false
 
-    n.modes[mode] = m
+    n.modes[modeName] = mode
     n.active = true
 
     sharedData.nodes[nodeName] = n

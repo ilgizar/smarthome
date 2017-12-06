@@ -82,7 +82,7 @@ func checkCondition(c interface{}) bool {
 }
 
 func loopCondition(rule smarthome.UsageConfigRuleStruct, c interface{}, nodeName string, state string) {
-    mode := getModeByState(state)
+    mode := getModeNameByState(state)
 
     cond, ok := getConditionStruct(c)
     if !ok {
@@ -96,18 +96,26 @@ func loopCondition(rule smarthome.UsageConfigRuleStruct, c interface{}, nodeName
 
     log.Printf("loopCondition: state(%s)\n", state)
     for _, node := range rule.Nodes {
-        if (nodeName != "" && nodeName != node) || !nodeExists(node) {
+        if (nodeName != "" && nodeName != node) || !nodeExists(node) || sharedData.nodes[node].modes[mode].prepared {
             continue
         }
 
         log.Printf("loopCondition: node(%s) mode(%s)\n", node, mode)
         if mode == "permit" {
+            var st string
             if ok {
-                checkChangeState(node, state)
+                st = state
             } else if sharedData.nodes[node].modes[mode].state == state {
-                checkChangeState(node, "limited")
+                st = "limited"
             } else {
                 continue
+            }
+
+            if checkChangeState(node, st) {
+                actionNode(node, mode, "end")
+                if ok {
+                    setNodeState(node, st)
+                }
             }
         }
 
@@ -116,7 +124,11 @@ func loopCondition(rule smarthome.UsageConfigRuleStruct, c interface{}, nodeName
         }
 
         if sharedData.nodes[node].active {
-            actionNode(node, mode)
+            actionNode(node, mode, "begin")
+        }
+
+        if ok {
+            setPreparedState(node, mode, true)
         }
     }
 }

@@ -61,12 +61,12 @@ func offActionState(action *smarthome.UsageConfigActionStruct) {
     sharedData.Unlock()
 }
 
-func loopAction(nodeName string, actionInx int, mode string) {
-    log.Printf("loopAction('%s', '%d', '%s')\n", nodeName, actionInx, mode)
+func loopAction(nodeName string, actionInx int, modeName string) {
+    log.Printf("loopAction('%s', '%d', '%s')\n", nodeName, actionInx, modeName)
     node := sharedData.nodes[nodeName]
-    action := sharedData.nodes[nodeName].modes[mode].actions[actionInx]
-    if checkActionState(action, node.modes[mode]) {
-        offActionState(&sharedData.nodes[nodeName].modes[mode].actions[actionInx])
+    action := sharedData.nodes[nodeName].modes[modeName].actions[actionInx]
+    if checkActionState(action, node.modes[modeName]) {
+        offActionState(&sharedData.nodes[nodeName].modes[modeName].actions[actionInx])
         action.Value = convertActionValue(action.Value, node)
         action.Destination = convertActionValue(action.Destination, node)
         if debug {
@@ -81,21 +81,29 @@ func loopAction(nodeName string, actionInx int, mode string) {
     }
 }
 
-func checkActionActive(mode NodeModeStruct) bool {
-    log.Printf("checkActionActive: active(%v) prepared(%v)\n", mode.active, mode.prepared)
-    return mode.active && !mode.prepared
-}
-
-func actionNode(nodeName, mode string) {
+func actionNode(nodeName, modeName string, event string) {
     if debug {
-        log.Printf("actionNode('%s', '%s')\n", nodeName, mode)
+        log.Printf("actionNode('%s', '%s', '%s')\n", nodeName, modeName, event)
     }
 
-    m := sharedData.nodes[nodeName].modes[mode]
-    if checkActionActive(m) {
-        setPreparedState(nodeName, mode, true)
-        for a, _ := range m.actions {
-            loopAction(nodeName, a, mode)
+    mode := sharedData.nodes[nodeName].modes[modeName]
+    log.Printf("checkActionActive: active(%v) prepared(%v)\n", mode.active, mode.prepared)
+    switch event {
+        case "begin":
+            if !mode.active || mode.prepared {
+                return
+            }
+        case "end":
+            if !mode.active {
+                return
+            }
+    }
+
+    for a, action := range mode.actions {
+        if action.Event != event {
+            continue
         }
+
+        loopAction(nodeName, a, modeName)
     }
 }

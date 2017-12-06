@@ -5,16 +5,15 @@ import (
 )
 
 
-func checkChangeState(nodeName, state string) {
+func checkChangeState(nodeName, state string) bool {
     log.Printf("checkChangeState('%s', '%s')\n", nodeName, state);
-    sharedData.Lock()
     mode := sharedData.nodes[nodeName].modes["permit"]
-    if mode.changed = mode.state != state; mode.changed {
-        log.Printf("State changed node(%s) state(%s)", nodeName, state)
-        mode.state = state
-        sharedData.nodes[nodeName].modes["permit"] = mode
+    changed := mode.state != state
+    if changed {
+        log.Printf("State changed node(%s) state(%s -> %s)", nodeName, mode.state, state)
     }
-    sharedData.Unlock()
+
+    return changed
 }
 
 func getModesList(modeName string) []string {
@@ -38,11 +37,21 @@ func setPreparedState(nodeName, modeName string, value bool) {
     }
 }
 
-func getModeByState(state string) string {
-    mode := "permit"
+func getModeNameByState(state string) string {
+    modeName := "permit"
     if state == "online" || state == "offline" {
-        mode = "state"
+        modeName = "state"
     }
 
-    return mode
+    return modeName
+}
+
+func setNodeState(nodeName, state string) {
+    sharedData.Lock()
+    mode := sharedData.nodes[nodeName].modes["permit"]
+    log.Printf("setNodeState('%s', '%s -> %s')", nodeName, mode.state, state)
+    mode.changed = mode.changed || mode.state != state
+    mode.state = state
+    sharedData.nodes[nodeName].modes["permit"] = mode
+    sharedData.Unlock()
 }

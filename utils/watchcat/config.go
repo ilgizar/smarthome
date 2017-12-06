@@ -136,6 +136,13 @@ func prepareCondition(cond *smarthome.UsageConfigConditionStruct) {
                 cond.Action[i].Type != "" &&
                 cond.Action[i].Value != "" &&
                 cond.Action[i].Destination != ""
+            if cond.Action[i].Enabled {
+                if cond.Action[i].Event == "" {
+                    cond.Action[i].Event = "begin"
+                } else {
+                    cond.Action[i].Event = strings.ToLower(cond.Action[i].Event)
+                }
+            }
         }
     }
 }

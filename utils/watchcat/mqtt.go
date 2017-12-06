@@ -49,6 +49,7 @@ func nodeSubscribe() {
                         mode := "state"
                         if (state && sharedData.nodes[node].modes[mode].state != "online") ||
                                 (!state && sharedData.nodes[node].modes[mode].state != "offline") {
+                            actionNode(node, "state", "end")
                             clearNodeActions(node, mode)
 
                             sharedData.Lock()
