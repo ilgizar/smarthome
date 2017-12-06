@@ -46,7 +46,7 @@ func clearNodeActions(nodeName string, mode string) {
         if mode == "state" {
             m = "permit"
         }
-        clear = len(n.modes[m].actions) > 0
+        clear = len(n.modes[m].actions) == 0
     }
     if clear {
         n.active = false
@@ -97,10 +97,6 @@ func checkNodeState(nodeName string, cond smarthome.UsageConfigConditionStruct, 
             if !res {
                 clearNodeActions(nodeName, mode)
             }
-        }
-
-        if !node.modes["state"].active && !node.modes["permit"].active {
-            node.active = false
         }
     }
 
