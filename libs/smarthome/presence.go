@@ -91,38 +91,46 @@ func GetUsageStat(deviceName string, periodValue int, periodBegin string, period
         begin =  end - int64(intervalValue) * 60
     }
 
-    for i, row := range res[0].Series[0].Values {
-        if (i > 0) {
+    if len(res) > 0 && len(res[0].Series) > 0 && len(res[0].Series[0].Values) > 0 {
+        for i, row := range res[0].Series[0].Values {
+            if (i == 0) {
+                continue
+            }
+
             t, err = time.Parse(time.RFC3339, row[0].(string))
-            if err == nil {
-                value, err = row[1].(json.Number).Float64()
-                if err == nil {
-                    value = 1 - value / 100
-                    entire = entire + value
+            if err != nil {
+                continue
+            }
 
-                    if (intervalValue == 0 || (t.Unix() >= begin && t.Unix() <= end)) {
-                        if value == 0 {
-                            pause++
-                        } else {
-                            on = on + value
-                        }
-                    }
+            value, err = row[1].(json.Number).Float64()
+            if err != nil {
+                continue
+            }
 
-                    if (intervalValue == 0) {
-                        if value == 0 {
-                            on = 0
-                        } else {
-                            pause = 0
-                        }
-                    }
+            value = 1 - value / 100
+            entire = entire + value
 
-                    if value == 0 {
-                        switchOn = true
-                    } else if (switchOn) {
-                        count++
-                        switchOn = false
-                    }
+            if (intervalValue == 0 || (t.Unix() >= begin && t.Unix() <= end)) {
+                if value == 0 {
+                    pause++
+                } else {
+                    on = on + value
                 }
+            }
+
+            if (intervalValue == 0) {
+                if value == 0 {
+                    on = 0
+                } else {
+                    pause = 0
+                }
+            }
+
+            if value == 0 {
+                switchOn = true
+            } else if (switchOn) {
+                count++
+                switchOn = false
             }
         }
     }
