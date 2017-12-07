@@ -51,6 +51,7 @@ func initModes() map[string]NodeModeStruct {
     modes["state"] = NodeModeStruct{
         active:    false,
         changed:   false,
+        event:     "",
         state:     "",
         eventtime: make(map[string]int),
         actions:   []smarthome.UsageConfigActionStruct{},
@@ -61,6 +62,7 @@ func initModes() map[string]NodeModeStruct {
     modes["permit"] = NodeModeStruct{
         active:    false,
         changed:   false,
+        event:     "",
         state:     "",
         eventtime: make(map[string]int),
         actions:   []smarthome.UsageConfigActionStruct{},

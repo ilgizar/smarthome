@@ -12,7 +12,7 @@ func checkUsage(state string, nodeName string) {
 
     if nodeName != "" {
         if nodeExists(nodeName) {
-            setPreparedState(nodeName, "state", false)
+            setPreparedState(nodeName, "", false)
         } else {
             return
         }
@@ -39,20 +39,20 @@ func checkUsage(state string, nodeName string) {
             }
         }
 
-        if state != "" {
-            continue
+        if state == "" {
+            for _, cond := range rule.Allowed {
+                loopCondition(rule, cond, nodeName, "allowed")
+            }
+
+            for _, cond := range rule.Denied {
+                loopCondition(rule, cond, nodeName, "denied")
+            }
         }
 
-        for _, cond := range rule.Allowed {
-            loopCondition(rule, cond, nodeName, "allowed")
-        }
-
-        for _, cond := range rule.Denied {
-            loopCondition(rule, cond, nodeName, "denied")
-        }
-
-        for _, cond := range rule.Limited {
-            loopCondition(rule, cond, nodeName, "limited")
+        if state == "" || (state == "online" && sharedData.nodes[nodeName].modes["permit"].state == "limited") {
+            for _, cond := range rule.Limited {
+                loopCondition(rule, cond, nodeName, "limited")
+            }
         }
     }
 }

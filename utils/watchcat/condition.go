@@ -13,9 +13,8 @@ import (
 func getConditionStruct(c interface{}) (smarthome.UsageConfigConditionStruct, bool) {
     ok := true
 
-    t := reflect.TypeOf(c).String()
     var cond smarthome.UsageConfigConditionStruct
-    switch t {
+    switch reflect.TypeOf(c).String() {
         case "smarthome.UsageConfigConditionStruct":
             cond = c.(smarthome.UsageConfigConditionStruct)
         case "smarthome.UsageConfigLimitedStruct":
@@ -81,8 +80,59 @@ func checkCondition(c interface{}) bool {
     return res
 }
 
+func enableCheckLimited(node NodeStruct) bool {
+    log.Printf("enableCheckLimited: %+v", node)
+    if node.modes["permit"].prepared {
+        return false
+    }
+
+    if node.modes["state"].state == "online" && node.modes["permit"].eventtime["limited"] < node.modes["state"].eventtime["online"] {
+        return true
+    }
+
+    now := time.Now()
+    return now.Second() == 0 || getDeltaTimestamp(node.modes["permit"].eventtime["limited"]) > 60
+}
+
+func setEventTime(nodeName, modeName string) {
+    sharedData.Lock()
+    mode := sharedData.nodes[nodeName].modes[modeName]
+    mode.eventtime[mode.state] = int(time.Now().Unix())
+    sharedData.nodes[nodeName].modes[modeName] = mode
+    sharedData.Unlock()
+}
+
+func getLimitedAction(nodeName string, cond smarthome.UsageConfigLimitedStruct) string {
+    node := sharedData.nodes[nodeName]
+    if !enableCheckLimited(node)  {
+        return ""
+    }
+
+    setEventTime(nodeName, "permit")
+
+    stat, err := smarthome.GetUsageStat(nodeName, cond.Period, cond.Begin, cond.End, cond.Using + cond.Pause)
+    log.Printf("%+v %+v", stat, err)
+    if err != nil {
+        return ""
+    }
+
+    if node.modes["permit"].event == "block" || node.modes["permit"].event == "begin" {
+        if stat.Pause >= cond.Pause && stat.On < cond.Overall {
+            return "open"
+        }
+    }
+
+    if node.modes["permit"].event == "open" || node.modes["permit"].event == "begin" {
+        if stat.Last >= cond.Using || stat.On >= cond.Overall {
+            return "block"
+        }
+    }
+
+    return ""
+}
+
 func loopCondition(rule smarthome.UsageConfigRuleStruct, c interface{}, nodeName string, state string) {
-    mode := getModeNameByState(state)
+    modeName := getModeNameByState(state)
 
     cond, ok := getConditionStruct(c)
     if !ok {
@@ -90,45 +140,53 @@ func loopCondition(rule smarthome.UsageConfigRuleStruct, c interface{}, nodeName
     }
 
     ok = checkCondition(c)
-    if !(ok || (mode == "permit" && state != "limited")) {
+    if !(ok || (modeName == "permit" && state != "limited")) {
         return
     }
 
     log.Printf("loopCondition: state(%s)\n", state)
-    for _, node := range rule.Nodes {
-        if (nodeName != "" && nodeName != node) || !nodeExists(node) || sharedData.nodes[node].modes[mode].prepared {
+    for _, n := range rule.Nodes {
+        mode := sharedData.nodes[n].modes[modeName]
+        if (nodeName != "" && nodeName != n) || !nodeExists(n) || mode.prepared {
             continue
         }
 
-        log.Printf("loopCondition: node(%s) mode(%s)\n", node, mode)
-        if mode == "permit" {
+        log.Printf("loopCondition: node(%s) mode(%s)\n", n, modeName)
+        if modeName == "permit" {
             var st string
             if ok {
                 st = state
-            } else if sharedData.nodes[node].modes[mode].state == state {
+            } else if mode.state == state {
                 st = "limited"
             } else {
                 continue
             }
 
-            if checkChangeState(node, st) {
-                actionNode(node, mode, "end")
+            if checkChangeState(n, st) {
+                actionNode(n, modeName, "end")
                 if ok {
-                    setNodeState(node, st)
+                    setNodeState(n, st)
                 }
             }
         }
 
-        if checkNodeState(node, cond, state) {
-            initNodeActions(node, cond, state)
+        if checkNodeState(n, cond, state) {
+            initNodeActions(n, cond, state)
         }
 
-        if sharedData.nodes[node].active {
-            actionNode(node, mode, "begin")
+        node := sharedData.nodes[n]
+        if node.active {
+            actionNode(n, modeName, "begin")
+            switch reflect.TypeOf(c).String() {
+                case "smarthome.UsageConfigLimitedStruct":
+                    if act := getLimitedAction(n, c.(smarthome.UsageConfigLimitedStruct)); act != "" {
+                        actionNode(n, modeName, act)
+                    }
+            }
         }
 
         if ok {
-            setPreparedState(node, mode, true)
+            setPreparedState(n, modeName, true)
         }
     }
 }

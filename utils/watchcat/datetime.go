@@ -48,3 +48,7 @@ func timeToMinutes(time string) int {
 
     return -1
 }
+
+func getDeltaTimestamp(value int) int {
+    return int(time.Now().Unix()) - value
+}

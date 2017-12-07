@@ -37,9 +37,12 @@ type UsageConfigConditionStruct struct {
 
 type UsageConfigLimitedStruct struct {
     UsageConfigConditionStruct
-    Overall      int
     Using        int
     Pause        int
+    Period       int
+    Overall      int
+    Begin        string
+    End          string
 }
 
 type UsageConfigRuleStruct struct {

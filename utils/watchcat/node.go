@@ -11,6 +11,7 @@ type NodeModeStruct struct {
     active         bool
     changed        bool
     prepared       bool
+    event          string
     state          string
     eventtime      map[string]int
     actions        []smarthome.UsageConfigActionStruct
